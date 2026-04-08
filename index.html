@@ -865,60 +865,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 知识角色 - AIWUS -->
-      <div class="role-card" onclick="enterChat('aiwus')">
-        <div class="role-card-avatar">
-          <img src="https://aiwus.wupen.org/static/avatar.15ddba3b.png" alt="AIWUS">
-        </div>
-        <div class="role-card-content">
-          <div class="role-card-name">AIWUS</div>
-          <div class="role-card-desc">How can I help ignite new sparks of urban innovation in your journey today?</div>
-        </div>
-        <div class="role-card-action">
-          <div class="chat-icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- 知识角色 - IntelliGuide -->
-      <div class="role-card" onclick="enterChat('intelliguide')">
-        <div class="role-card-avatar">
-          <img src="https://aiwus.wupen.org/static/avatar_waic.0fd3f5ac.jpg" alt="IntelliGuide">
-        </div>
-        <div class="role-card-content">
-          <div class="role-card-name">AIWUS IntelliGuide</div>
-          <div class="role-card-desc">Curious about the future of cities? I'm here to illuminate ideas from the Smart City 2035 series.</div>
-        </div>
-        <div class="role-card-action">
-          <div class="chat-icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- 知识角色 - 院士 -->
-      <div class="role-card" onclick="enterChat('academician')">
-        <div class="role-card-avatar">
-          <img src="https://aiwus.wupen.org/static/avatar_acad.bf47d81e.png" alt="Academician">
-        </div>
-        <div class="role-card-content">
-          <div class="role-card-name">Classical-Style Academician</div>
-          <div class="role-card-desc">A classically styled scholar-advisor for AIWUS who speaks in refined, measured English.</div>
-        </div>
-        <div class="role-card-action">
-          <div class="chat-icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- 聊天页面 -->
@@ -1075,6 +1021,18 @@
       }
     };
 
+    // 仅开放的角色（UI 隐藏 + 前端硬限制）
+    const ENABLED_ROLES = new Set(['xiaoying', 'xiaozhe']);
+    const ENABLED_ROLES_TIP = '当前仅开放：小樱 Sakura / 阿哲 Alex';
+
+    function isRoleEnabled(role) {
+      return ENABLED_ROLES.has(role);
+    }
+
+    function showRoleDisabledTip() {
+      alert(ENABLED_ROLES_TIP);
+    }
+
     let currentRole = null;
     let messageHistory = [];
     let webSearchEnabled = false;
@@ -1141,6 +1099,14 @@
 
     // 进入聊天
     function enterChat(role) {
+      if (!isRoleEnabled(role)) {
+        showRoleDisabledTip();
+        return;
+      }
+      if (!roleData[role]) {
+        alert('角色不存在或未配置');
+        return;
+      }
       currentRole = role;
       const data = roleData[role];
 
@@ -1191,6 +1157,10 @@
     // 发送消息（核心）
     async function doSend(text) {
       if (!currentRole) return;
+      if (!isRoleEnabled(currentRole)) {
+        showRoleDisabledTip();
+        return;
+      }
 
       // 移除已有追问建议
       removeFollowUpSuggestions(true);
