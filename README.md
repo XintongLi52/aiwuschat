@@ -247,3 +247,9 @@ const roleData = {
 | systemd + gunicorn | ~12 MB |
 | Docker (alpine, 多阶段) | ~136 MB |
 | Docker (slim) | ~170 MB |
+
+
+以后改代码再上传
+git add .
+git commit -m "说明这次改了什么"
+git push
