@@ -22,6 +22,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 JWT_SECRET = config.get('jwt_secret', 'aiwus-default-secret')
+MYSQL_ENABLED = bool(config.get('mysql')) and not config.get('disable_mysql', False)
 
 client = OpenAI(
     api_key=config['api_key'],
@@ -33,6 +34,8 @@ client = OpenAI(
 # ========================
 
 def get_db():
+    if not MYSQL_ENABLED:
+        raise RuntimeError("MySQL is disabled")
     if 'db' not in g:
         mc = config['mysql']
         g.db = pymysql.connect(
@@ -54,6 +57,10 @@ def close_db(exc):
         db.close()
 
 def init_db():
+    if not MYSQL_ENABLED:
+        print("[AIWUS] MySQL disabled, skip database initialization.")
+        return
+
     mc = config['mysql']
     conn = pymysql.connect(
         host=mc['host'],
@@ -103,8 +110,35 @@ def init_db():
     cur.close()
     conn.close()
 
-# 启动时初始化数据库
-init_db()
+def mysql_disabled_response():
+    return jsonify({"error": "当前未启用数据库功能"}), 503
+
+def ensure_guest_user_id():
+    if not MYSQL_ENABLED:
+        return 0
+    db = get_db()
+    cur = db.cursor()
+    guest_email = 'guest@aiwus.local'
+    cur.execute("SELECT id FROM users WHERE email=%s", (guest_email,))
+    row = cur.fetchone()
+    if row:
+        user_id = row['id']
+    else:
+        pw_hash = generate_password_hash('guest-no-login')
+        cur.execute(
+            "INSERT INTO users (email, password_hash, nickname) VALUES (%s, %s, %s)",
+            (guest_email, pw_hash, 'Guest')
+        )
+        user_id = cur.lastrowid
+    cur.close()
+    return user_id
+
+# 启动时初始化数据库（失败时降级）
+try:
+    init_db()
+except Exception as e:
+    MYSQL_ENABLED = False
+    print(f"[AIWUS] MySQL init failed, running without DB: {e}")
 
 # ========================
 # JWT 认证
@@ -120,16 +154,8 @@ def create_token(user_id):
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({"error": "未登录"}), 401
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-            g.user_id = payload['user_id']
-        except jwt.ExpiredSignatureError:
-            return jsonify({"error": "登录已过期"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"error": "无效的登录凭证"}), 401
+        # 免登录模式：所有受保护接口都以访客身份访问
+        g.user_id = ensure_guest_user_id() if MYSQL_ENABLED else 0
         return f(*args, **kwargs)
     return decorated
 
@@ -194,6 +220,9 @@ def static_files(path):
 
 @app.route('/api/register', methods=['POST'])
 def register():
+    if not MYSQL_ENABLED:
+        return mysql_disabled_response()
+
     data = request.json
     email = data.get('email', '').strip()
     password = data.get('password', '')
@@ -222,6 +251,9 @@ def register():
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    if not MYSQL_ENABLED:
+        return mysql_disabled_response()
+
     data = request.json
     email = data.get('email', '').strip()
     password = data.get('password', '')
@@ -241,6 +273,9 @@ def login():
 @app.route('/api/user', methods=['GET'])
 @auth_required
 def get_user():
+    if not MYSQL_ENABLED:
+        return mysql_disabled_response()
+
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT id, email, nickname FROM users WHERE id=%s", (g.user_id,))
@@ -257,6 +292,9 @@ def get_user():
 @app.route('/api/conversations', methods=['GET'])
 @auth_required
 def list_conversations():
+    if not MYSQL_ENABLED:
+        return jsonify({"conversations": []})
+
     role = request.args.get('role', '')
     db = get_db()
     cur = db.cursor()
@@ -275,6 +313,9 @@ def list_conversations():
 @app.route('/api/conversations', methods=['POST'])
 @auth_required
 def create_conversation():
+    if not MYSQL_ENABLED:
+        return mysql_disabled_response()
+
     data = request.json
     role = data.get('role', 'aiwus')
     db = get_db()
@@ -287,6 +328,9 @@ def create_conversation():
 @app.route('/api/conversations/<int:conv_id>', methods=['DELETE'])
 @auth_required
 def delete_conversation(conv_id):
+    if not MYSQL_ENABLED:
+        return mysql_disabled_response()
+
     db = get_db()
     cur = db.cursor()
     cur.execute("DELETE FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
@@ -296,6 +340,9 @@ def delete_conversation(conv_id):
 @app.route('/api/conversations/<int:conv_id>/messages', methods=['GET'])
 @auth_required
 def get_messages(conv_id):
+    if not MYSQL_ENABLED:
+        return jsonify({"messages": []})
+
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT id FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
@@ -358,24 +405,27 @@ def chat():
     enable_search = data.get('enable_search', False)
     user_content = data.get('user_content', '')
 
-    # 确保有会话
-    db = get_db()
-    cur = db.cursor()
-    if conv_id:
-        cur.execute("SELECT id FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
-        if not cur.fetchone():
-            cur.close()
-            return jsonify({"error": "会话不存在"}), 404
+    # 确保有会话（无数据库时跳过存储）
+    if MYSQL_ENABLED:
+        db = get_db()
+        cur = db.cursor()
+        if conv_id:
+            cur.execute("SELECT id FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
+            if not cur.fetchone():
+                cur.close()
+                return jsonify({"error": "会话不存在"}), 404
+        else:
+            cur.execute("INSERT INTO conversations (user_id, role) VALUES (%s, %s)", (g.user_id, role))
+            conv_id = cur.lastrowid
+
+        # 保存用户消息
+        if user_content:
+            save_content = user_content if isinstance(user_content, str) else json.dumps(user_content, ensure_ascii=False)
+            cur.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'user', %s)", (conv_id, save_content))
+
+        cur.close()
     else:
-        cur.execute("INSERT INTO conversations (user_id, role) VALUES (%s, %s)", (g.user_id, role))
-        conv_id = cur.lastrowid
-
-    # 保存用户消息
-    if user_content:
-        save_content = user_content if isinstance(user_content, str) else json.dumps(user_content, ensure_ascii=False)
-        cur.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'user', %s)", (conv_id, save_content))
-
-    cur.close()
+        conv_id = conv_id or 0
 
     system_prompt = SYSTEM_PROMPTS.get(role, SYSTEM_PROMPTS['aiwus'])
     full_messages = [{"role": "system", "content": system_prompt}] + messages
@@ -407,7 +457,7 @@ def chat():
                         yield text
                 # 流结束后保存 AI 回复
                 reply_text = ''.join(full_reply)
-                if reply_text:
+                if MYSQL_ENABLED and reply_text:
                     db2 = pymysql.connect(
                         host=config['mysql']['host'],
                         port=config['mysql'].get('port', 3306),
@@ -443,9 +493,10 @@ def chat():
             return resp
         else:
             content = response.choices[0].message.content
-            cur2 = get_db().cursor()
-            cur2.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'assistant', %s)", (conv_id, content))
-            cur2.close()
+            if MYSQL_ENABLED:
+                cur2 = get_db().cursor()
+                cur2.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'assistant', %s)", (conv_id, content))
+                cur2.close()
             resp = app.response_class(content, mimetype='text/plain')
             resp.headers['X-Conversation-Id'] = str(conv_id)
             return resp

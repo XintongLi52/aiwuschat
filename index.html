@@ -308,8 +308,8 @@
     let messageHistory = [];
     let webSearchEnabled = false;
     let selectedFile = null;
-    let currentToken = localStorage.getItem('aiwus_token');
-    let currentUser = null;
+    let currentToken = 'guest-no-auth';
+    let currentUser = { nickname: 'Guest', email: 'guest@aiwus.local' };
     let currentConversationId = null;
     let isLoginMode = true;
 
@@ -325,7 +325,7 @@
 
     // ========== Auth ==========
     function authHeaders() {
-      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentToken };
+      return { 'Content-Type': 'application/json' };
     }
 
     function toggleAuthMode() {
@@ -367,28 +367,19 @@
     }
 
     function logout() {
-      currentToken = null;
-      currentUser = null;
-      localStorage.removeItem('aiwus_token');
       backToRoleList();
-      document.getElementById('authOverlay').classList.remove('hidden');
-      document.getElementById('navUserName').textContent = '';
     }
 
     async function checkAuth() {
-      if (!currentToken) { document.getElementById('authOverlay').classList.remove('hidden'); return; }
-      try {
-        const res = await fetch('/api/user', { headers: authHeaders() });
-        const data = await res.json();
-        if (data.error) { logout(); return; }
-        currentUser = data.user;
-        onLoginSuccess();
-      } catch (e) { logout(); }
+      // 免登录模式：默认访客直进
+      document.getElementById('authOverlay').classList.add('hidden');
+      document.getElementById('navUserName').textContent = 'Guest';
+      document.getElementById('logoutBtn').classList.add('hidden');
     }
 
     // ========== Conversations ==========
     async function loadConversations() {
-      if (!currentToken || !currentRole) return;
+      if (!currentRole) return;
       try {
         const res = await fetch('/api/conversations?role=' + currentRole, { headers: authHeaders() });
         const data = await res.json();
@@ -465,7 +456,7 @@
 
     async function uploadFile(file) {
       const fd = new FormData(); fd.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + currentToken }, body: fd });
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
       return await res.json();
     }
 
