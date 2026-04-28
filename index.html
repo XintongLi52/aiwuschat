@@ -5,1426 +5,597 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AIWUS</title>
   <style>
-    :root {
-      --color-primary: #675dff;
-      --bg-color: #f5f6f8;
-      --card-bg: #ffffff;
-    }
+    :root { --color-primary: #675dff; --bg-color: #f5f6f8; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-color); height: 100vh; display: flex; flex-direction: column; }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    /* 登录模态框 */
+    .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .auth-overlay.hidden { display: none; }
+    .auth-box { background: #fff; border-radius: 20px; padding: 36px 32px; width: 380px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,0.15); }
+    .auth-box h2 { text-align: center; margin-bottom: 24px; color: #333; font-size: 22px; }
+    .auth-box input { width: 100%; padding: 12px 16px; border: 1px solid #ddd; border-radius: 12px; font-size: 14px; margin-bottom: 14px; outline: none; transition: border-color 0.2s; }
+    .auth-box input:focus { border-color: var(--color-primary); }
+    .auth-btn { width: 100%; padding: 12px; background: var(--color-primary); color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; transition: opacity 0.2s; }
+    .auth-btn:hover { opacity: 0.9; }
+    .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: #999; }
+    .auth-switch a { color: var(--color-primary); cursor: pointer; text-decoration: none; }
+    .auth-error { color: #e74c3c; font-size: 13px; text-align: center; margin-bottom: 10px; min-height: 18px; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: var(--bg-color);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* 顶部导航栏 */
-    .top-nav {
-      background: #fff;
-      padding: 12px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #eee;
-    }
-
-    .top-nav-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .back-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .back-btn svg {
-      width: 20px;
-      height: 20px;
-      fill: #333;
-    }
-
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-
-    .user-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .top-nav-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #333;
-    }
+    /* 顶部导航 */
+    .top-nav { background: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+    .top-nav-left { display: flex; align-items: center; gap: 12px; }
+    .top-nav-right { display: flex; align-items: center; gap: 12px; }
+    .top-nav-user { font-size: 13px; color: #666; }
+    .logout-btn { font-size: 12px; color: #999; cursor: pointer; border: none; background: none; padding: 4px 8px; border-radius: 6px; }
+    .logout-btn:hover { background: #f0f0f0; color: #e74c3c; }
+    .back-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .back-btn svg { width: 20px; height: 20px; fill: #333; }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .top-nav-title { font-size: 14px; font-weight: 600; color: #333; }
 
     /* 页面容器 */
-    .page-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+    .page-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-    /* 角色列表页面 */
-    .role-list-page {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-    }
-
-    .page-title {
-      text-align: center;
-      font-size: 20px;
-      font-weight: 700;
-      color: #333;
-      margin-bottom: 24px;
-    }
-
-    .role-card {
-      display: flex;
-      align-items: flex-start;
-      background: #fff;
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
-
-    .role-card:hover {
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-      transform: translateY(-2px);
-    }
-
-    .role-card-avatar {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      overflow: hidden;
-      margin-right: 16px;
-    }
-
-    .role-card-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .role-card-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .role-card-name {
-      font-size: 16px;
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .new-badge {
-      padding: 2px 8px;
-      background: linear-gradient(135deg, #ff6b8a 0%, #ff8fab 100%);
-      color: #fff;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .role-card-desc {
-      font-size: 13px;
-      color: #888;
-      line-height: 1.5;
-    }
-
-    .role-card-action {
-      display: flex;
-      align-items: center;
-    }
-
-    .chat-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: #f5f6f8;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .chat-icon svg {
-      width: 18px;
-      height: 18px;
-      fill: var(--color-primary);
-    }
-
-    .role-card:hover .chat-icon {
-      background: var(--color-primary);
-    }
-
-    .role-card:hover .chat-icon svg {
-      fill: #fff;
-    }
+    /* 角色列表 */
+    .role-list-page { flex: 1; padding: 20px; overflow-y: auto; }
+    .page-title { text-align: center; font-size: 20px; font-weight: 700; color: #333; margin-bottom: 24px; }
+    .role-card { display: flex; align-items: flex-start; background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+    .role-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .role-card-avatar { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; overflow: hidden; margin-right: 16px; }
+    .role-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .role-card-content { flex: 1; min-width: 0; }
+    .role-card-name { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .new-badge { padding: 2px 8px; background: linear-gradient(135deg, #ff6b8a, #ff8fab); color: #fff; border-radius: 8px; font-size: 11px; font-weight: 600; }
+    .role-card-desc { font-size: 13px; color: #888; line-height: 1.5; }
+    .role-card-action { display: flex; align-items: center; }
+    .chat-icon { width: 36px; height: 36px; border-radius: 50%; background: #f5f6f8; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .chat-icon svg { width: 18px; height: 18px; fill: var(--color-primary); }
+    .role-card:hover .chat-icon { background: var(--color-primary); }
+    .role-card:hover .chat-icon svg { fill: #fff; }
 
     /* 聊天页面 */
-    .chat-page {
-      display: none;
-      flex: 1;
-      flex-direction: column;
-      overflow: hidden;
-    }
+    .chat-page { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .chat-page.active { display: flex; }
+    .chat-main { display: flex; flex: 1; overflow: hidden; }
 
-    .chat-page.active {
-      display: flex;
-    }
+    /* 侧边栏 */
+    .sidebar { width: 260px; background: #fff; border-right: 1px solid #eee; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-header { padding: 16px; border-bottom: 1px solid #eee; }
+    .new-chat-btn { width: 100%; padding: 10px; background: var(--color-primary); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .new-chat-btn:hover { opacity: 0.9; }
+    .sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .conv-item { padding: 12px 14px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; font-size: 13px; color: #555; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s; white-space: nowrap; overflow: hidden; }
+    .conv-item:hover { background: #f5f6f8; }
+    .conv-item.active { background: rgba(103,93,255,0.1); color: var(--color-primary); font-weight: 500; }
+    .conv-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .conv-item-del { width: 20px; height: 20px; border: none; background: none; cursor: pointer; display: none; fill: #ccc; flex-shrink: 0; }
+    .conv-item:hover .conv-item-del { display: flex; align-items: center; justify-content: center; }
+    .conv-item-del:hover { fill: #e74c3c; }
+    .conv-item-del svg { width: 14px; height: 14px; fill: inherit; }
 
     /* 聊天头部 */
-    .chat-header {
-      background: #fff;
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      border-bottom: 1px solid #eee;
-    }
+    .chat-header { background: #fff; padding: 16px 20px; display: flex; align-items: center; border-bottom: 1px solid #eee; }
+    .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; margin-right: 12px; flex-shrink: 0; }
+    .chat-header-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .chat-header-info { flex: 1; }
+    .chat-header-name { font-size: 16px; font-weight: 600; color: #333; }
+    .chat-header-handle { font-size: 12px; color: #999; }
 
-    .chat-header-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      overflow: hidden;
-      margin-right: 12px;
-      flex-shrink: 0;
-    }
+    /* 聊天区域 */
+    .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .chat-body { flex: 1; padding: 24px; overflow-y: auto; background: #f5f6f8; }
+    .chat-welcome { display: flex; flex-direction: column; align-items: center; padding-top: 40px; }
+    .chat-welcome-avatar { width: 160px; height: 160px; border-radius: 50%; overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
+    .chat-welcome-avatar video, .chat-welcome-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .chat-welcome-text { font-size: 15px; color: #333; background: #fff; padding: 12px 16px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 24px; max-width: 500px; text-align: center; }
+    .suggestion-list { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 500px; }
+    .suggestion-item { background: #fff; padding: 14px 18px; border-radius: 12px; font-size: 14px; color: #555; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; text-align: left; }
+    .suggestion-item:hover { border-color: var(--color-primary); box-shadow: 0 2px 12px rgba(103,93,255,0.15); }
 
-    .chat-header-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .chat-header-info {
-      flex: 1;
-    }
-
-    .chat-header-name {
-      font-size: 16px;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .chat-header-handle {
-      font-size: 12px;
-      color: #999;
-    }
-
-    /* 聊天内容区 */
-    .chat-body {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-      background: #f5f6f8;
-    }
-
-    .chat-welcome {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding-top: 40px;
-    }
-
-    .chat-welcome-avatar {
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      overflow: hidden;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
-    }
-
-    .chat-welcome-avatar video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .chat-welcome-text {
-      font-size: 15px;
-      color: #333;
-      background: #fff;
-      padding: 12px 16px;
-      border-radius: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      margin-bottom: 24px;
-      max-width: 500px;
-      text-align: center;
-    }
-
-    .suggestion-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      max-width: 500px;
-    }
-
-    .suggestion-item {
-      background: #fff;
-      padding: 14px 18px;
-      border-radius: 12px;
-      font-size: 14px;
-      color: #555;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-      text-align: left;
-    }
-
-    .suggestion-item:hover {
-      border-color: var(--color-primary);
-      box-shadow: 0 2px 12px rgba(103, 93, 255, 0.15);
-    }
-
-    /* 消息样式 */
-    .message-list {
-      margin-top: 20px;
-    }
-
-    .message-list:empty {
-      display: none;
-    }
-
-    .message {
-      display: flex;
-      margin-bottom: 20px;
-    }
-
-    .message.assistant {
-      flex-direction: row;
-    }
-
-    .message.user {
-      flex-direction: row-reverse;
-    }
-
-    .message-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      overflow: hidden;
-      flex-shrink: 0;
-      background: #f0f0f0;
-    }
-
-    .message-avatar img,
-    .message-avatar video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .message.assistant .message-avatar {
-      margin-right: 12px;
-    }
-
-    .message.user .message-avatar {
-      margin-left: 12px;
-    }
-
-    .message-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .message-content {
-      max-width: 70%;
-      padding: 12px 16px;
-      background: #fff;
-      border-radius: 16px;
-      font-size: 14px;
-      color: #333;
-      line-height: 1.6;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-    .message.user .message-content {
-      background: var(--color-primary);
-      color: #fff;
-    }
-
-    /* 用户消息中的图片预览 */
-    .message-content .msg-image {
-      max-width: 200px;
-      max-height: 200px;
-      border-radius: 8px;
-      margin-top: 8px;
-      display: block;
-    }
-
-    .message.user .message-content .msg-image {
-      border: 1px solid rgba(255,255,255,0.3);
-    }
-
-    .message-content .msg-file-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: rgba(0,0,0,0.06);
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      margin-top: 6px;
-    }
-
-    .message.user .message-content .msg-file-tag {
-      background: rgba(255,255,255,0.2);
-    }
-
-    /* Markdown 样式 */
-    .message-content p {
-      margin: 0 0 10px 0;
-    }
-
-    .message-content p:last-child {
-      margin-bottom: 0;
-    }
-
-    .message-content pre {
-      background: #f6f8fa;
-      padding: 12px 16px;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin: 10px 0;
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: 13px;
-    }
-
-    .message.user .message-content pre {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    .message-content code {
-      font-family: 'Consolas', 'Monaco', monospace;
-      background: #f6f8fa;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 13px;
-    }
-
-    .message.user .message-content code {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    .message-content pre code {
-      padding: 0;
-      background: transparent;
-    }
-
-    .message-content ul, .message-content ol {
-      margin: 8px 0;
-      padding-left: 24px;
-    }
-
-    .message-content li {
-      margin: 4px 0;
-    }
-
-    .message-content blockquote {
-      border-left: 3px solid var(--color-primary);
-      padding-left: 12px;
-      margin: 10px 0;
-      color: #666;
-    }
-
-    .message.user .message-content blockquote {
-      color: #eee;
-      border-left-color: #fff;
-    }
-
-    .message-content h1, .message-content h2, .message-content h3 {
-      margin: 12px 0 8px 0;
-      font-weight: 600;
-    }
-
-    .message-content h1 { font-size: 18px; }
-    .message-content h2 { font-size: 16px; }
-    .message-content h3 { font-size: 15px; }
-
-    .message-content table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 10px 0;
-    }
-
-    .message-content th, .message-content td {
-      border: 1px solid #ddd;
-      padding: 8px 12px;
-      text-align: left;
-    }
-
-    .message-content th {
-      background: #f6f8fa;
-      font-weight: 600;
-    }
-
-    .message-content a {
-      color: var(--color-primary);
-      text-decoration: underline;
-    }
-
-    .message.user .message-content a {
-      color: #fff;
-    }
-
-    .message-content hr {
-      border: none;
-      border-top: 1px solid #eee;
-      margin: 12px 0;
-    }
+    /* 消息 */
+    .message-list { margin-top: 20px; }
+    .message-list:empty { display: none; }
+    .message { display: flex; margin-bottom: 20px; }
+    .message.assistant { flex-direction: row; }
+    .message.user { flex-direction: row-reverse; }
+    .message-avatar { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: #f0f0f0; }
+    .message-avatar img, .message-avatar video { width: 100%; height: 100%; object-fit: cover; }
+    .message.assistant .message-avatar { margin-right: 12px; }
+    .message.user .message-avatar { margin-left: 12px; }
+    .message-content { max-width: 70%; padding: 12px 16px; background: #fff; border-radius: 16px; font-size: 14px; color: #333; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .message.user .message-content { background: var(--color-primary); color: #fff; }
+    .message-content .msg-image { max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 8px; display: block; }
+    .message-content .msg-file-tag { display: inline-flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.06); padding: 4px 10px; border-radius: 8px; font-size: 12px; margin-top: 6px; }
+    .message.user .message-content .msg-file-tag { background: rgba(255,255,255,0.2); }
+    .message-content p { margin: 0 0 10px 0; }
+    .message-content p:last-child { margin-bottom: 0; }
+    .message-content pre { background: #f6f8fa; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; font-family: 'Consolas', monospace; font-size: 13px; }
+    .message.user .message-content pre { background: rgba(255,255,255,0.2); }
+    .message-content code { font-family: 'Consolas', monospace; background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    .message.user .message-content code { background: rgba(255,255,255,0.2); }
+    .message-content pre code { padding: 0; background: transparent; }
+    .message-content ul, .message-content ol { margin: 8px 0; padding-left: 24px; }
+    .message-content li { margin: 4px 0; }
+    .message-content blockquote { border-left: 3px solid var(--color-primary); padding-left: 12px; margin: 10px 0; color: #666; }
+    .message-content h1, .message-content h2, .message-content h3 { margin: 12px 0 8px 0; font-weight: 600; }
+    .message-content h1 { font-size: 18px; } .message-content h2 { font-size: 16px; } .message-content h3 { font-size: 15px; }
+    .message-content table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    .message-content th, .message-content td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    .message-content th { background: #f6f8fa; font-weight: 600; }
+    .message-content a { color: var(--color-primary); text-decoration: underline; }
+    .message.user .message-content a { color: #fff; }
+    .message-content hr { border: none; border-top: 1px solid #eee; margin: 12px 0; }
 
     /* 输入区域 */
-    .chat-footer {
-      background: #fff;
-      padding: 16px 20px;
-      border-top: 1px solid #eee;
-    }
+    .chat-footer { background: #fff; padding: 16px 20px; border-top: 1px solid #eee; }
+    .file-preview-bar { display: none; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 10px; background: #f5f6f8; border-radius: 12px; }
+    .file-preview-bar.active { display: flex; }
+    .file-preview-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #e0e0e0; }
+    .file-preview-icon { width: 40px; height: 40px; border-radius: 8px; background: var(--color-primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .file-preview-icon svg { width: 20px; height: 20px; fill: #fff; }
+    .file-preview-info { flex: 1; min-width: 0; }
+    .file-preview-name { font-size: 13px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-preview-size { font-size: 11px; color: #999; }
+    .file-preview-remove { width: 24px; height: 24px; border-radius: 50%; border: none; background: #ddd; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .file-preview-remove:hover { background: #ccc; }
+    .file-preview-remove svg { width: 12px; height: 12px; fill: #666; }
+    .input-wrapper { display: flex; align-items: center; background: #f5f6f8; border-radius: 24px; padding: 8px 16px; }
+    .chat-input { flex: 1; border: none; background: transparent; font-size: 14px; outline: none; padding: 8px 0; max-height: 100px; overflow-y: auto; resize: none; font-family: inherit; }
+    .chat-input::placeholder { color: #ccc; }
+    .input-actions { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
+    .input-action-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .input-action-btn:hover { background: #eee; }
+    .input-action-btn svg { width: 18px; height: 18px; fill: #999; }
+    .send-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--color-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+    .send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(103,93,255,0.3); }
+    .send-btn svg { width: 18px; height: 18px; fill: #fff; }
+    .input-tools { display: flex; gap: 12px; margin-top: 8px; }
+    .tool-chip { display: flex; align-items: center; gap: 4px; padding: 4px 10px; background: #f5f6f8; border-radius: 12px; font-size: 11px; color: #999; cursor: pointer; transition: all 0.2s; border: 1.5px solid transparent; user-select: none; }
+    .tool-chip:hover { background: #eee; }
+    .tool-chip.active { background: rgba(103,93,255,0.1); color: var(--color-primary); border-color: var(--color-primary); }
+    .tool-chip.active svg { fill: var(--color-primary); }
+    .tool-chip svg { width: 12px; height: 12px; fill: #999; }
 
-    /* 文件预览区 */
-    .file-preview-bar {
-      display: none;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      margin-bottom: 10px;
-      background: #f5f6f8;
-      border-radius: 12px;
-    }
+    .hidden { display: none !important; }
+    .typing-indicator { display: flex; gap: 4px; }
+    .typing-indicator span { width: 8px; height: 8px; background: #ccc; border-radius: 50%; animation: typing 1.4s infinite; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .follow-up-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; margin-left: 48px; max-width: 70%; transition: opacity 0.4s ease, transform 0.4s ease; }
+    .follow-up-suggestions.fade-out { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+    .follow-up-item { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #fff; border: 1px solid #e8e8e8; border-radius: 20px; font-size: 13px; color: #555; cursor: pointer; transition: all 0.2s; width: fit-content; }
+    .follow-up-item:hover { border-color: var(--color-primary); color: var(--color-primary); box-shadow: 0 2px 8px rgba(103,93,255,0.12); }
+    .follow-up-item svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
 
-    .file-preview-bar.active {
-      display: flex;
-    }
+    /* 移动端侧边栏抽屉 */
+    .sidebar-toggle { display: none; width: 32px; height: 32px; border: none; background: transparent; cursor: pointer; align-items: center; justify-content: center; }
+    .sidebar-toggle svg { width: 20px; height: 20px; fill: #333; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 99; }
+    .sidebar-overlay.active { display: block; }
 
-    .file-preview-thumb {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      object-fit: cover;
-      background: #e0e0e0;
-    }
-
-    .file-preview-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      background: var(--color-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .file-preview-icon svg {
-      width: 20px;
-      height: 20px;
-      fill: #fff;
-    }
-
-    .file-preview-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .file-preview-name {
-      font-size: 13px;
-      font-weight: 500;
-      color: #333;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .file-preview-size {
-      font-size: 11px;
-      color: #999;
-    }
-
-    .file-preview-remove {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      border: none;
-      background: #ddd;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.2s;
-    }
-
-    .file-preview-remove:hover {
-      background: #ccc;
-    }
-
-    .file-preview-remove svg {
-      width: 12px;
-      height: 12px;
-      fill: #666;
-    }
-
-    .input-wrapper {
-      display: flex;
-      align-items: center;
-      background: #f5f6f8;
-      border-radius: 24px;
-      padding: 8px 16px;
-    }
-
-    .chat-input {
-      flex: 1;
-      border: none;
-      background: transparent;
-      font-size: 14px;
-      outline: none;
-      padding: 8px 0;
-      max-height: 100px;
-      overflow-y: auto;
-      resize: none;
-      font-family: inherit;
-    }
-
-    .chat-input::placeholder {
-      color: #ccc;
-    }
-
-    .input-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: 12px;
-    }
-
-    .input-action-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .input-action-btn:hover {
-      background: #eee;
-    }
-
-    .input-action-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: #999;
-    }
-
-    .send-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: none;
-      background: var(--color-primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-
-    .send-btn:hover {
-      transform: scale(1.05);
-      box-shadow: 0 4px 12px rgba(103, 93, 255, 0.3);
-    }
-
-    .send-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: #fff;
-    }
-
-    .input-tools {
-      display: flex;
-      gap: 12px;
-      margin-top: 8px;
-    }
-
-    .tool-chip {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
-      background: #f5f6f8;
-      border-radius: 12px;
-      font-size: 11px;
-      color: #999;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1.5px solid transparent;
-      user-select: none;
-    }
-
-    .tool-chip:hover {
-      background: #eee;
-    }
-
-    .tool-chip.active {
-      background: rgba(103, 93, 255, 0.1);
-      color: var(--color-primary);
-      border-color: var(--color-primary);
-    }
-
-    .tool-chip.active svg {
-      fill: var(--color-primary);
-    }
-
-    .tool-chip svg {
-      width: 12px;
-      height: 12px;
-      fill: #999;
-    }
-
-    /* 隐藏类 */
-    .hidden {
-      display: none !important;
-    }
-
-    /* 打字动画 */
-    .typing-indicator {
-      display: flex;
-      gap: 4px;
-    }
-
-    .typing-indicator span {
-      width: 8px;
-      height: 8px;
-      background: #ccc;
-      border-radius: 50%;
-      animation: typing 1.4s infinite;
-    }
-
-    .typing-indicator span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-
-    .typing-indicator span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-
-    @keyframes typing {
-      0%, 100% {
-        transform: translateY(0);
-      }
-      50% {
-        transform: translateY(-6px);
-      }
-    }
-
-    /* 追问建议 */
-    .follow-up-suggestions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
-      margin-left: 48px;
-      max-width: 70%;
-      transition: opacity 0.4s ease, transform 0.4s ease;
-    }
-
-    .follow-up-suggestions.fade-out {
-      opacity: 0;
-      transform: translateY(-8px);
-      pointer-events: none;
-    }
-
-    .follow-up-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 14px;
-      background: #fff;
-      border: 1px solid #e8e8e8;
-      border-radius: 20px;
-      font-size: 13px;
-      color: #555;
-      cursor: pointer;
-      transition: all 0.2s;
-      width: fit-content;
-    }
-
-    .follow-up-item:hover {
-      border-color: var(--color-primary);
-      color: var(--color-primary);
-      box-shadow: 0 2px 8px rgba(103, 93, 255, 0.12);
-    }
-
-    .follow-up-item svg {
-      width: 14px;
-      height: 14px;
-      fill: currentColor;
-      flex-shrink: 0;
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 100; width: 280px; transition: left 0.3s ease; box-shadow: 4px 0 20px rgba(0,0,0,0.1); }
+      .sidebar.open { left: 0; }
+      .sidebar-toggle { display: flex; }
     }
   </style>
 </head>
 <body>
+  <!-- 登录/注册 -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-box">
+      <h2 id="authTitle">Login</h2>
+      <div class="auth-error" id="authError"></div>
+      <input type="text" id="authNickname" placeholder="Nickname" class="hidden">
+      <input type="email" id="authEmail" placeholder="Email">
+      <input type="password" id="authPassword" placeholder="Password">
+      <button class="auth-btn" onclick="handleAuth()"><span id="authBtnText">Login</span></button>
+      <div class="auth-switch">
+        <span id="authSwitchText">Don't have an account?</span>
+        <a onclick="toggleAuthMode()"><span id="authSwitchLink">Sign up</span></a>
+      </div>
+    </div>
+  </div>
+
   <!-- 顶部导航 -->
   <nav class="top-nav">
     <div class="top-nav-left">
       <button class="back-btn hidden" id="backBtn" onclick="backToRoleList()">
-        <svg viewBox="0 0 24 24">
-          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-        </svg>
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
       </button>
       <div class="user-avatar">
         <img src="https://aiwus.wupen.org/static/avatar_user.ac21bb6e.png" alt="">
       </div>
       <span class="top-nav-title">AIWUS</span>
     </div>
+    <div class="top-nav-right">
+      <span class="top-nav-user" id="navUserName"></span>
+      <button class="logout-btn" id="logoutBtn" onclick="logout()">Logout</button>
+    </div>
   </nav>
 
   <div class="page-container">
-    <!-- 角色列表页面 -->
+    <!-- 角色列表 -->
     <div class="role-list-page" id="roleListPage">
       <h1 class="page-title">AIWUS</h1>
-
-      <!-- 陪伴角色 - 小樱 -->
-      <div class="role-card" onclick="enterChat('xiaoying')">
-        <div class="role-card-avatar">
-          <img src="/pic/girl.jpg" alt="小樱">
-        </div>
-        <div class="role-card-content">
-          <div class="role-card-name">
-            小樱 Sakura
-            <span class="new-badge">NEW</span>
-          </div>
-          <div class="role-card-desc">你的暖心陪伴女孩，喜欢咖啡、电影和深夜聊天。当你需要倾听和陪伴时，她总在这里。</div>
-        </div>
-        <div class="role-card-action">
-          <div class="chat-icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- 陪伴角色 - 阿哲 -->
-      <div class="role-card" onclick="enterChat('xiaozhe')">
-        <div class="role-card-avatar">
-          <img src="/pic/boy.jpg" alt="阿哲">
-        </div>
-        <div class="role-card-content">
-          <div class="role-card-name">
-            阿哲 Alex
-            <span class="new-badge">NEW</span>
-          </div>
-          <div class="role-card-desc">阳光开朗的运动男孩，喜欢篮球、音乐和科技。随时准备给你加油打气！</div>
-        </div>
-        <div class="role-card-action">
-          <div class="chat-icon">
-            <svg viewBox="0 0 24 24">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
-          </div>
-        </div>
-      </div>
+      <div class="role-card" onclick="enterChat('xiaoying')"><div class="role-card-avatar"><img src="/img/Urbania.png" alt=""></div><div class="role-card-content"><div class="role-card-name">Urbania <span class="new-badge">NEW</span></div><div class="role-card-desc">温柔治愈的城市女孩，陪你聊日常、谈心事。</div></div><div class="role-card-action"><div class="chat-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div></div></div>
+      <div class="role-card" onclick="enterChat('xiaozhe')"><div class="role-card-avatar"><img src="/img/Urbanest.png" alt=""></div><div class="role-card-content"><div class="role-card-name">Urbanest <span class="new-badge">NEW</span></div><div class="role-card-desc">阳光开朗的城市男孩，和你分享生活的热爱。</div></div><div class="role-card-action"><div class="chat-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div></div></div>
+      <div class="role-card" onclick="enterChat('aiwus')"><div class="role-card-avatar"><img src="/img/lumina.jpg" alt=""></div><div class="role-card-content"><div class="role-card-name">Lumina <span class="new-badge">NEW</span></div><div class="role-card-desc">灵感导师 / 聊天导师，陪你思考、激发创意、探讨话题。</div></div><div class="role-card-action"><div class="chat-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div></div></div>
+      <div class="role-card hidden" onclick="enterChat('intelliguide')"><div class="role-card-avatar"><img src="https://aiwus.wupen.org/static/avatar_waic.0fd3f5ac.jpg" alt=""></div><div class="role-card-content"><div class="role-card-name">AIWUS IntelliGuide</div><div class="role-card-desc">Curious about the future of cities? Smart City 2035 series.</div></div><div class="role-card-action"><div class="chat-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div></div></div>
+      <div class="role-card hidden" onclick="enterChat('academician')"><div class="role-card-avatar"><img src="https://aiwus.wupen.org/static/avatar_acad.bf47d81e.png" alt=""></div><div class="role-card-content"><div class="role-card-name">Classical-Style Academician</div><div class="role-card-desc">A classically styled scholar-advisor in refined English.</div></div><div class="role-card-action"><div class="chat-icon"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div></div></div>
     </div>
 
     <!-- 聊天页面 -->
     <div class="chat-page" id="chatPage">
       <div class="chat-header">
-        <div class="chat-header-avatar">
-          <img id="chatAvatar" src="" alt="">
-        </div>
+        <button class="sidebar-toggle" onclick="toggleSidebar()">
+          <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+        </button>
+        <div class="chat-header-avatar"><img id="chatAvatar" src="" alt=""></div>
         <div class="chat-header-info">
           <div class="chat-header-name" id="chatName"></div>
           <div class="chat-header-handle" id="chatHandle">@wupen.org</div>
         </div>
       </div>
-
-      <div class="chat-body" id="chatBody">
-        <!-- 欢迎区域 -->
-        <div class="chat-welcome" id="chatWelcome">
-          <div class="chat-welcome-avatar">
-            <video id="welcomeAvatar" src="" autoplay loop muted playsinline></video>
-          </div>
-          <div class="chat-welcome-text" id="welcomeText"></div>
-          <div class="suggestion-list" id="suggestionList"></div>
-        </div>
-
-        <!-- 消息列表 -->
-        <div class="message-list" id="messageList"></div>
-      </div>
-
-      <div class="chat-footer">
-        <!-- 文件预览区 -->
-        <div class="file-preview-bar" id="filePreviewBar">
-          <div id="filePreviewContent"></div>
-          <div class="file-preview-info">
-            <div class="file-preview-name" id="filePreviewName"></div>
-            <div class="file-preview-size" id="filePreviewSize"></div>
-          </div>
-          <button class="file-preview-remove" onclick="removeSelectedFile()">
-            <svg viewBox="0 0 24 24">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="input-wrapper">
-          <textarea class="chat-input" placeholder="Send message..." id="chatInput" rows="1"></textarea>
-          <div class="input-actions">
-            <button class="input-action-btn" onclick="document.getElementById('fileInput').click()">
-              <svg viewBox="0 0 24 24">
-                <path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3zM5 19l3-4 2 3 3-4 4 5H5z"/>
-              </svg>
-            </button>
-            <button class="send-btn" onclick="sendMessage()">
-              <svg viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
+      <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+      <div class="chat-main">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <button class="new-chat-btn" onclick="newConversation()">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              New Chat
             </button>
           </div>
+          <div class="sidebar-list" id="sidebarList"></div>
         </div>
-        <div class="input-tools">
-          <div class="tool-chip" id="webSearchChip" onclick="toggleWebSearch()">
-            <svg viewBox="0 0 24 24">
-              <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-            </svg>
-            Web Search
+        <!-- 聊天区 -->
+        <div class="chat-area">
+          <div class="chat-body" id="chatBody">
+            <div class="chat-welcome" id="chatWelcome">
+              <div class="chat-welcome-avatar" id="welcomeAvatar"></div>
+              <div class="chat-welcome-text" id="welcomeText"></div>
+              <div class="suggestion-list" id="suggestionList"></div>
+            </div>
+            <div class="message-list" id="messageList"></div>
           </div>
-          <div class="tool-chip" onclick="document.getElementById('fileInput').click()">
-            <svg viewBox="0 0 24 24">
-              <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-            </svg>
-            Add Files
+          <div class="chat-footer">
+            <div class="file-preview-bar" id="filePreviewBar">
+              <div id="filePreviewContent"></div>
+              <div class="file-preview-info"><div class="file-preview-name" id="filePreviewName"></div><div class="file-preview-size" id="filePreviewSize"></div></div>
+              <button class="file-preview-remove" onclick="removeSelectedFile()"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+            </div>
+            <div class="input-wrapper">
+              <textarea class="chat-input" placeholder="Send message..." id="chatInput" rows="1"></textarea>
+              <div class="input-actions">
+                <button class="input-action-btn" onclick="document.getElementById('fileInput').click()"><svg viewBox="0 0 24 24"><path d="M19 7v2.99s-1.99.01-2 0V7h-3s.01-1.99 0-2h3V2h2v3h3v2h-3zm-3 4V8h-3V5H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8h-3zM5 19l3-4 2 3 3-4 4 5H5z"/></svg></button>
+                <button class="send-btn" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+              </div>
+            </div>
+            <div class="input-tools">
+              <div class="tool-chip" id="webSearchChip" onclick="toggleWebSearch()"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg> Web Search</div>
+              <div class="tool-chip" onclick="document.getElementById('fileInput').click()"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Add Files</div>
+            </div>
+            <input type="file" id="fileInput" style="display:none" accept="image/*,.txt,.md,.csv,.log,.json,.xml,.pdf,.doc,.docx" onchange="handleFileSelect(event)">
           </div>
         </div>
-        <!-- 隐藏文件选择器 -->
-        <input type="file" id="fileInput" style="display:none" accept="image/*,.txt,.md,.csv,.log,.json,.xml,.pdf,.doc,.docx" onchange="handleFileSelect(event)">
       </div>
     </div>
   </div>
 
-  <!-- 引入 marked 解析 Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
-    // 配置 marked 选项
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      headerIds: false,
-      mangle: false
-    });
+    marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
 
-    // 角色数据
     const roleData = {
-      xiaoying: {
-        name: '小樱 Sakura',
-        handle: '@wupen.org',
-        avatar: '/pic/girl.jpg',
-        video: '/pic/girl.mp4',
-        welcome: 'Welcome to AIWUS. How can I help ignite new sparks of urban innovation in your journey today?',
-        suggestions: [
-          '今天有什么开心的事吗？',
-          '推荐一部电影吧',
-          '聊聊周末计划',
-          '心情不好求安慰'
-        ]
-      },
-      xiaozhe: {
-        name: '阿哲 Alex',
-        handle: '@wupen.org',
-        avatar: '/pic/boy.jpg',
-        video: '/pic/boy.mp4',
-        welcome: 'Hey! 今天状态怎么样？我刚健完身，正想着要不要找个人分享一下今天的快乐呢！',
-        suggestions: [
-          '今天运动了吗？',
-          '推荐一首歌吧',
-          '聊聊篮球',
-          '求鼓励'
-        ]
-      },
-      aiwus: {
-        name: 'AIWUS',
-        handle: '@wupen.org',
-        avatar: 'https://aiwus.wupen.org/static/avatar.15ddba3b.png',
-        video: 'https://aiwus.wupen.org/static/avatar.1e87ddf1.mp4',
-        welcome: 'Welcome to AIWUS. How can I help ignite new sparks of urban innovation in your journey today?',
-        suggestions: [
-          'How can AI improve cities?',
-          'Provide strategies for integrating AI into urban planning.',
-          'Share innovative methods for addressing urban sustainability challenges.'
-        ]
-      },
-      intelliguide: {
-        name: 'AIWUS IntelliGuide',
-        handle: '@wupen.org',
-        avatar: 'https://aiwus.wupen.org/static/avatar_waic.0fd3f5ac.jpg',
-        video: 'https://aiwus.wupen.org/static/avatar.1e87ddf1.mp4',
-        welcome: 'Curious about the future of cities? I\'m here to illuminate ideas from the Smart City 2035 series.',
-        suggestions: [
-          'What is Smart City 2035?',
-          'Tell me about future urban trends',
-          'Explain sustainable city planning'
-        ]
-      },
-      academician: {
-        name: 'Classical-Style Academician',
-        handle: '@wupen.org',
-        avatar: 'https://aiwus.wupen.org/static/avatar_acad.bf47d81e.png',
-        video: 'https://aiwus.wupen.org/static/avatar.1e87ddf1.mp4',
-        welcome: 'A classically styled scholar-advisor for AIWUS. How may I assist you today?',
-        suggestions: [
-          'Urban design principles',
-          'Architecture and society',
-          'Sustainable development',
-          'Policy recommendations'
-        ]
-      }
+      xiaoying: { name: 'Urbania', handle: '@wupen.org', avatar: '/img/Urbania.png', video: '/img/Urbania.png', welcome: 'Hi~ 我是 Urbania，很高兴见到你！有什么想聊的吗？', suggestions: ['今天有什么开心的事吗？','推荐一部电影吧','聊聊周末计划','心情不好求安慰'] },
+      xiaozhe: { name: 'Urbanest', handle: '@wupen.org', avatar: '/img/Urbanest.png', video: '/img/Urbanest.png', welcome: 'Hey! 我是 Urbanest，今天状态怎么样？', suggestions: ['今天运动了吗？','推荐一首歌吧','聊聊篮球','求鼓励'] },
+      aiwus: { name: 'Lumina', handle: '@wupen.org', avatar: '/img/lumina.jpg', video: '/img/lumina.jpg', welcome: 'Hi，我是 Lumina，你的灵感导师～今天想聊点什么？', suggestions: ['帮我找一个创作灵感','聊聊最近的想法','推荐一个值得思考的话题','和我一起头脑风暴'] },
+      intelliguide: { name: 'AIWUS IntelliGuide', handle: '@wupen.org', avatar: 'https://aiwus.wupen.org/static/avatar_waic.0fd3f5ac.jpg', video: 'https://aiwus.wupen.org/static/avatar.1e87ddf1.mp4', welcome: 'Curious about the future of cities?', suggestions: ['What is Smart City 2035?','Future urban trends','Sustainable city planning'] },
+      academician: { name: 'Classical-Style Academician', handle: '@wupen.org', avatar: 'https://aiwus.wupen.org/static/avatar_acad.bf47d81e.png', video: 'https://aiwus.wupen.org/static/avatar.1e87ddf1.mp4', welcome: 'How may I assist you today?', suggestions: ['Urban design principles','Architecture and society','Sustainable development'] }
     };
 
-    // 仅开放的角色（UI 隐藏 + 前端硬限制）
-    const ENABLED_ROLES = new Set(['xiaoying', 'xiaozhe']);
-    const ENABLED_ROLES_TIP = '当前仅开放：小樱 Sakura / 阿哲 Alex';
-
-    function isRoleEnabled(role) {
-      return ENABLED_ROLES.has(role);
-    }
-
-    function showRoleDisabledTip() {
-      alert(ENABLED_ROLES_TIP);
+    function mediaTag(src, className, autoplay = true) {
+      const isVideo = /\.(mp4|webm|ogg)$/i.test(src);
+      if (!isVideo) return `<img class="${className}" src="${src}" alt="">`;
+      return `<video class="${className}" src="${src}"${autoplay ? ' autoplay' : ''} loop muted playsinline></video>`;
     }
 
     let currentRole = null;
     let messageHistory = [];
     let webSearchEnabled = false;
-    let selectedFile = null; // { file, type, dataUrl, content, filename }
+    let selectedFile = null;
+    let currentToken = localStorage.getItem('aiwus_token');
+    let currentUser = null;
+    let currentConversationId = null;
+    let isLoginMode = true;
 
-    // 切换 Web Search
-    function toggleWebSearch() {
-      webSearchEnabled = !webSearchEnabled;
-      const chip = document.getElementById('webSearchChip');
-      chip.classList.toggle('active', webSearchEnabled);
+    // ========== Sidebar ==========
+    function toggleSidebar() {
+      document.querySelector('.sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('active');
+    }
+    function closeSidebar() {
+      document.querySelector('.sidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').classList.remove('active');
     }
 
-    // 处理文件选择
+    // ========== Auth ==========
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentToken };
+    }
+
+    function toggleAuthMode() {
+      isLoginMode = !isLoginMode;
+      document.getElementById('authTitle').textContent = isLoginMode ? 'Login' : 'Sign Up';
+      document.getElementById('authBtnText').textContent = isLoginMode ? 'Login' : 'Sign Up';
+      document.getElementById('authNickname').classList.toggle('hidden', isLoginMode);
+      document.getElementById('authSwitchText').textContent = isLoginMode ? "Don't have an account?" : "Already have an account?";
+      document.getElementById('authSwitchLink').textContent = isLoginMode ? 'Sign up' : 'Login';
+      document.getElementById('authError').textContent = '';
+    }
+
+    async function handleAuth() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const nickname = document.getElementById('authNickname').value.trim();
+      const errEl = document.getElementById('authError');
+
+      if (!email || !password) { errEl.textContent = 'Please enter email and password'; return; }
+      if (!isLoginMode && !nickname) { errEl.textContent = 'Please enter a nickname'; return; }
+
+      const url = isLoginMode ? '/api/login' : '/api/register';
+      const body = isLoginMode ? { email, password } : { email, password, nickname };
+
+      try {
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (data.error) { errEl.textContent = data.error; return; }
+        currentToken = data.token;
+        currentUser = data.user;
+        localStorage.setItem('aiwus_token', currentToken);
+        onLoginSuccess();
+      } catch (e) { errEl.textContent = 'Network error'; }
+    }
+
+    function onLoginSuccess() {
+      document.getElementById('authOverlay').classList.add('hidden');
+      document.getElementById('navUserName').textContent = currentUser.nickname || currentUser.email;
+    }
+
+    function logout() {
+      currentToken = null;
+      currentUser = null;
+      localStorage.removeItem('aiwus_token');
+      backToRoleList();
+      document.getElementById('authOverlay').classList.remove('hidden');
+      document.getElementById('navUserName').textContent = '';
+    }
+
+    async function checkAuth() {
+      if (!currentToken) { document.getElementById('authOverlay').classList.remove('hidden'); return; }
+      try {
+        const res = await fetch('/api/user', { headers: authHeaders() });
+        const data = await res.json();
+        if (data.error) { logout(); return; }
+        currentUser = data.user;
+        onLoginSuccess();
+      } catch (e) { logout(); }
+    }
+
+    // ========== Conversations ==========
+    async function loadConversations() {
+      if (!currentToken || !currentRole) return;
+      try {
+        const res = await fetch('/api/conversations?role=' + currentRole, { headers: authHeaders() });
+        const data = await res.json();
+        renderSidebar(data.conversations || []);
+      } catch (e) {}
+    }
+
+    function renderSidebar(convs) {
+      const list = document.getElementById('sidebarList');
+      list.innerHTML = '';
+      convs.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'conv-item' + (c.id === currentConversationId ? ' active' : '');
+        div.innerHTML = `<span class="conv-item-title">${c.title}</span><button class="conv-item-del" onclick="event.stopPropagation();deleteConversation(${c.id})"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>`;
+        div.onclick = () => switchConversation(c.id);
+        list.appendChild(div);
+      });
+    }
+
+    async function newConversation() {
+      currentConversationId = null;
+      messageHistory = [];
+      document.getElementById('messageList').innerHTML = '';
+      document.getElementById('chatWelcome').classList.remove('hidden');
+      document.getElementById('welcomeText').classList.remove('hidden');
+      document.getElementById('suggestionList').classList.remove('hidden');
+      loadConversations();
+    }
+
+    async function switchConversation(convId) {
+      closeSidebar();
+      currentConversationId = convId;
+      messageHistory = [];
+      document.getElementById('messageList').innerHTML = '';
+      document.getElementById('welcomeText').classList.add('hidden');
+      document.getElementById('suggestionList').classList.add('hidden');
+      loadConversations();
+
+      try {
+        const res = await fetch(`/api/conversations/${convId}/messages`, { headers: authHeaders() });
+        const data = await res.json();
+        if (data.messages) {
+          data.messages.forEach(m => {
+            messageHistory.push({ role: m.role, content: m.content });
+            addMessage(m.content, m.role, false);
+          });
+        }
+      } catch (e) {}
+    }
+
+    async function deleteConversation(convId) {
+      try {
+        await fetch(`/api/conversations/${convId}`, { method: 'DELETE', headers: authHeaders() });
+        if (convId === currentConversationId) newConversation();
+        else loadConversations();
+      } catch (e) {}
+    }
+
+    // ========== Chat ==========
+    function toggleWebSearch() { webSearchEnabled = !webSearchEnabled; document.getElementById('webSearchChip').classList.toggle('active', webSearchEnabled); }
+
     function handleFileSelect(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      selectedFile = { file: file, filename: file.name };
-      const previewBar = document.getElementById('filePreviewBar');
-      const previewContent = document.getElementById('filePreviewContent');
-      const previewName = document.getElementById('filePreviewName');
-      const previewSize = document.getElementById('filePreviewSize');
-
-      previewName.textContent = file.name;
-      previewSize.textContent = formatFileSize(file.size);
-
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          previewContent.innerHTML = `<img class="file-preview-thumb" src="${e.target.result}" alt="">`;
-        };
-        reader.readAsDataURL(file);
-      } else {
-        previewContent.innerHTML = `
-          <div class="file-preview-icon">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
-          </div>`;
-      }
-
-      previewBar.classList.add('active');
+      const file = event.target.files[0]; if (!file) return;
+      selectedFile = { file, filename: file.name };
+      document.getElementById('filePreviewName').textContent = file.name;
+      document.getElementById('filePreviewSize').textContent = formatFileSize(file.size);
+      if (file.type.startsWith('image/')) { const r = new FileReader(); r.onload = e => { document.getElementById('filePreviewContent').innerHTML = `<img class="file-preview-thumb" src="${e.target.result}" alt="">`; }; r.readAsDataURL(file); }
+      else { document.getElementById('filePreviewContent').innerHTML = `<div class="file-preview-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg></div>`; }
+      document.getElementById('filePreviewBar').classList.add('active');
       event.target.value = '';
     }
+    function removeSelectedFile() { selectedFile = null; document.getElementById('filePreviewBar').classList.remove('active'); }
+    function formatFileSize(b) { if (b < 1024) return b+' B'; if (b < 1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
-    // 移除已选文件
-    function removeSelectedFile() {
-      selectedFile = null;
-      document.getElementById('filePreviewBar').classList.remove('active');
-    }
-
-    // 格式化文件大小
-    function formatFileSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    // 上传文件到后端
     async function uploadFile(file) {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + currentToken }, body: fd });
       return await res.json();
     }
 
-    // 进入聊天
     function enterChat(role) {
-      if (!isRoleEnabled(role)) {
-        showRoleDisabledTip();
-        return;
-      }
-      if (!roleData[role]) {
-        alert('角色不存在或未配置');
-        return;
-      }
       currentRole = role;
+      currentConversationId = null;
       const data = roleData[role];
-
       document.getElementById('roleListPage').classList.add('hidden');
       document.getElementById('chatPage').classList.add('active');
       document.getElementById('backBtn').classList.remove('hidden');
-
       document.getElementById('chatAvatar').src = data.avatar;
       document.getElementById('chatName').textContent = data.name;
       document.getElementById('chatHandle').textContent = data.handle;
-
-      const welcomeAvatar = document.getElementById('welcomeAvatar');
-      welcomeAvatar.src = data.video;
-      welcomeAvatar.autoplay = false;
-      welcomeAvatar.loop = true;
-      welcomeAvatar.muted = true;
-      welcomeAvatar.playsInline = true;
+      document.getElementById('welcomeAvatar').innerHTML = mediaTag(data.video, '', false);
       document.getElementById('welcomeText').textContent = data.welcome;
       document.getElementById('welcomeText').classList.remove('hidden');
-      document.getElementById('suggestionList').classList.remove('hidden');
-
-      const suggestionList = document.getElementById('suggestionList');
-      suggestionList.innerHTML = '';
-      data.suggestions.forEach(text => {
-        const item = document.createElement('div');
-        item.className = 'suggestion-item';
-        item.textContent = text;
-        item.onclick = () => sendSuggestion(text);
-        suggestionList.appendChild(item);
-      });
-
+      document.getElementById('chatWelcome').classList.remove('hidden');
+      const sl = document.getElementById('suggestionList'); sl.innerHTML = ''; sl.classList.remove('hidden');
+      data.suggestions.forEach(t => { const i = document.createElement('div'); i.className = 'suggestion-item'; i.textContent = t; i.onclick = () => doSend(t); sl.appendChild(i); });
       messageHistory = [];
       document.getElementById('messageList').innerHTML = '';
       removeSelectedFile();
       webSearchEnabled = false;
       document.getElementById('webSearchChip').classList.remove('active');
+      loadConversations();
     }
 
-    // 返回列表
     function backToRoleList() {
       document.getElementById('roleListPage').classList.remove('hidden');
       document.getElementById('chatPage').classList.remove('active');
       document.getElementById('backBtn').classList.add('hidden');
-      currentRole = null;
+      currentRole = null; currentConversationId = null;
       removeSelectedFile();
     }
 
-    // 发送消息（核心）
     async function doSend(text) {
       if (!currentRole) return;
-      if (!isRoleEnabled(currentRole)) {
-        showRoleDisabledTip();
-        return;
-      }
-
-      // 移除已有追问建议
       removeFollowUpSuggestions(true);
-
       document.getElementById('welcomeText').classList.add('hidden');
       document.getElementById('suggestionList').classList.add('hidden');
-
-      const welcomeVideo = document.getElementById('welcomeAvatar');
-      welcomeVideo.play();
+      const wv = document.querySelector('#welcomeAvatar video'); if (wv) wv.play();
 
       let fileData = null;
-      if (selectedFile) {
-        fileData = await uploadFile(selectedFile.file);
-        removeSelectedFile();
-      }
+      if (selectedFile) { fileData = await uploadFile(selectedFile.file); removeSelectedFile(); }
 
-      // 构建用户消息显示
       let displayHtml = text;
       if (fileData && fileData.success) {
-        if (fileData.type === 'image') {
-          displayHtml += `<br><img class="msg-image" src="${fileData.data_url}" alt="${fileData.filename}">`;
-        } else if (fileData.type === 'text') {
-          displayHtml += `<div class="msg-file-tag"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg> ${fileData.filename}</div>`;
-        }
+        if (fileData.type === 'image') displayHtml += `<br><img class="msg-image" src="${fileData.data_url}" alt="">`;
+        else if (fileData.type === 'text') displayHtml += `<div class="msg-file-tag">${fileData.filename}</div>`;
       }
       addMessage(displayHtml, 'user', true);
 
-      // 构建发送给 API 的消息
       let apiContent;
-      if (fileData && fileData.success && fileData.type === 'image') {
-        apiContent = [
-          { type: 'text', text: text || '请描述这张图片' },
-          { type: 'image_url', image_url: { url: fileData.data_url } }
-        ];
-      } else if (fileData && fileData.success && fileData.type === 'text') {
-        apiContent = text + '\n\n[附件内容: ' + fileData.filename + ']\n' + fileData.content;
-      } else {
-        apiContent = text;
-      }
+      if (fileData && fileData.success && fileData.type === 'image') { apiContent = [{ type: 'text', text: text || '请描述这张图片' }, { type: 'image_url', image_url: { url: fileData.data_url } }]; }
+      else if (fileData && fileData.success && fileData.type === 'text') { apiContent = text + '\n\n[附件: ' + fileData.filename + ']\n' + fileData.content; }
+      else { apiContent = text; }
 
       messageHistory.push({ role: 'user', content: apiContent });
-
       showTyping();
 
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: currentRole,
-            messages: messageHistory,
-            enable_search: webSearchEnabled
-          })
+          headers: authHeaders(),
+          body: JSON.stringify({ role: currentRole, messages: messageHistory, enable_search: webSearchEnabled, conversation_id: currentConversationId, user_content: apiContent })
         });
+
+        // 读取新创建的 conversation_id
+        const newConvId = response.headers.get('X-Conversation-Id');
+        if (newConvId) currentConversationId = parseInt(newConvId);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let fullMessage = '';
-        let hasStarted = false;
-        let currentMsgId = null;
+        let fullMessage = '', hasStarted = false, currentMsgId = null;
 
         while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          fullMessage += chunk;
-
-          if (!hasStarted && chunk.trim()) {
-            hasStarted = true;
-            hideTyping();
-            currentMsgId = createStreamingMessage();
-            updateStreamingMessage(currentMsgId, fullMessage);
-          } else if (hasStarted && currentMsgId) {
-            updateStreamingMessage(currentMsgId, fullMessage);
-          }
+          const { done, value } = await reader.read(); if (done) break;
+          const chunk = decoder.decode(value); fullMessage += chunk;
+          if (!hasStarted && chunk.trim()) { hasStarted = true; hideTyping(); currentMsgId = createStreamingMessage(); updateStreamingMessage(currentMsgId, fullMessage); }
+          else if (hasStarted && currentMsgId) { updateStreamingMessage(currentMsgId, fullMessage); }
         }
 
         messageHistory.push({ role: 'assistant', content: fullMessage });
-
-        // 请求追问建议
+        loadConversations();
         fetchFollowUpSuggestions(fullMessage);
-      } catch (error) {
-        hideTyping();
-        const messageContentId = createStreamingMessage();
-        updateStreamingMessage(messageContentId, '抱歉，连接出错了，请检查网络～');
-      } finally {
-        welcomeVideo.pause();
-        welcomeVideo.currentTime = 0;
-      }
+      } catch (error) { hideTyping(); const mid = createStreamingMessage(); updateStreamingMessage(mid, 'Network error...'); }
+      finally { if (wv) { wv.pause(); wv.currentTime = 0; } }
     }
 
-    // 获取并显示追问建议
+    async function sendMessage() { const input = document.getElementById('chatInput'); const t = input.value.trim(); if (!t && !selectedFile) return; input.value = ''; input.style.height = 'auto'; await doSend(t); }
+
     async function fetchFollowUpSuggestions(answer) {
       try {
-        const res = await fetch('/api/suggestions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ answer, role: currentRole })
-        });
+        const res = await fetch('/api/suggestions', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ answer, role: currentRole }) });
         const data = await res.json();
-        if (data.success && data.suggestions.length > 0) {
-          showFollowUpSuggestions(data.suggestions);
-        }
+        if (data.success && data.suggestions.length > 0) showFollowUpSuggestions(data.suggestions);
       } catch (e) {}
     }
-
-    // 显示追问建议气泡
     function showFollowUpSuggestions(suggestions) {
-      // 移除已有的追问建议
       removeFollowUpSuggestions(false);
-
-      const messageList = document.getElementById('messageList');
-      const container = document.createElement('div');
-      container.className = 'follow-up-suggestions';
-
-      suggestions.forEach(text => {
-        const item = document.createElement('div');
-        item.className = 'follow-up-item';
-        item.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><span>${text}</span>`;
-        item.onclick = () => {
-          // 淡出后发送
-          container.classList.add('fade-out');
-          setTimeout(() => {
-            container.remove();
-            doSend(text);
-          }, 400);
-        };
-        container.appendChild(item);
-      });
-
-      messageList.appendChild(container);
-      messageList.scrollTop = messageList.scrollHeight;
+      const ml = document.getElementById('messageList'); const c = document.createElement('div'); c.className = 'follow-up-suggestions';
+      suggestions.forEach(t => { const i = document.createElement('div'); i.className = 'follow-up-item'; i.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><span>${t}</span>`; i.onclick = () => { c.classList.add('fade-out'); setTimeout(() => { c.remove(); doSend(t); }, 400); }; c.appendChild(i); });
+      ml.appendChild(c); ml.scrollTop = ml.scrollHeight;
     }
+    function removeFollowUpSuggestions(anim) { document.querySelectorAll('.follow-up-suggestions').forEach(el => { if (anim) { el.classList.add('fade-out'); setTimeout(() => el.remove(), 400); } else el.remove(); }); }
 
-    // 移除追问建议（发新消息时调用）
-    function removeFollowUpSuggestions(animate) {
-      const existing = document.querySelectorAll('.follow-up-suggestions');
-      existing.forEach(el => {
-        if (animate) {
-          el.classList.add('fade-out');
-          setTimeout(() => el.remove(), 400);
-        } else {
-          el.remove();
-        }
-      });
-    }
-
-    // 发送消息入口
-    async function sendMessage() {
-      const input = document.getElementById('chatInput');
-      const text = input.value.trim();
-      if (!text && !selectedFile) return;
-      input.value = '';
-      input.style.height = 'auto';
-      await doSend(text);
-    }
-
-    // 发送建议
-    function sendSuggestion(text) {
-      doSend(text);
-    }
-
-    // 创建流式消息
     function createStreamingMessage() {
-      const messageList = document.getElementById('messageList');
-      const data = roleData[currentRole];
-      const msgDiv = document.createElement('div');
-      msgDiv.className = 'message assistant';
-      const messageId = 'msg-' + Date.now();
-      msgDiv.innerHTML = `
-        <div class="message-avatar">
-          <video class="role-video" src="${data.video}" autoplay loop muted playsinline></video>
-        </div>
-        <div class="message-content">
-          <div id="${messageId}"></div>
-        </div>
-      `;
-      messageList.appendChild(msgDiv);
-      messageList.scrollTop = messageList.scrollHeight;
-      return messageId;
+      const ml = document.getElementById('messageList'); const data = roleData[currentRole]; const d = document.createElement('div'); d.className = 'message assistant'; const id = 'msg-' + Date.now();
+      d.innerHTML = `<div class="message-avatar">${mediaTag(data.video, 'role-video')}</div><div class="message-content"><div id="${id}"></div></div>`;
+      ml.appendChild(d); ml.scrollTop = ml.scrollHeight; return id;
     }
+    function updateStreamingMessage(id, content) { const el = document.getElementById(id); if (el) { el.innerHTML = marked.parse(content); document.getElementById('messageList').scrollTop = document.getElementById('messageList').scrollHeight; } }
 
-    // 更新流式消息内容
-    function updateStreamingMessage(elementId, content) {
-      const element = document.getElementById(elementId);
-      if (element) {
-        element.innerHTML = marked.parse(content);
-        const messageList = document.getElementById('messageList');
-        messageList.scrollTop = messageList.scrollHeight;
-      }
-    }
-
-    // 添加消息
     function addMessage(text, type, isHtml) {
-      const messageList = document.getElementById('messageList');
-      const data = roleData[currentRole];
-
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `message ${type}`;
-
-      if (type === 'user') {
-        msgDiv.innerHTML = `
-          <div class="message-avatar">
-            <img src="https://aiwus.wupen.org/static/avatar_user.ac21bb6e.png" alt="">
-          </div>
-          <div class="message-content">${isHtml ? text : marked.parse(text)}</div>
-        `;
-      } else {
-        msgDiv.innerHTML = `
-          <div class="message-avatar">
-            <video class="role-video" src="${data.video}" autoplay loop muted playsinline></video>
-          </div>
-          <div class="message-content">${marked.parse(text)}</div>
-        `;
-      }
-
-      messageList.appendChild(msgDiv);
-      messageList.scrollTop = messageList.scrollHeight;
+      const ml = document.getElementById('messageList'); const data = roleData[currentRole]; const d = document.createElement('div'); d.className = `message ${type}`;
+      if (type === 'user') d.innerHTML = `<div class="message-avatar"><img src="https://aiwus.wupen.org/static/avatar_user.ac21bb6e.png" alt=""></div><div class="message-content">${isHtml ? text : marked.parse(text)}</div>`;
+      else d.innerHTML = `<div class="message-avatar">${mediaTag(data.video, 'role-video')}</div><div class="message-content">${marked.parse(text)}</div>`;
+      ml.appendChild(d); ml.scrollTop = ml.scrollHeight;
     }
 
-    // 显示输入状态
     let typingDiv = null;
-    function showTyping() {
-      const messageList = document.getElementById('messageList');
-      const data = roleData[currentRole];
-      typingDiv = document.createElement('div');
-      typingDiv.className = 'message assistant';
-      typingDiv.innerHTML = `
-        <div class="message-avatar">
-          <img src="${data.avatar}" alt="">
-        </div>
-        <div class="message-content">
-          <div class="typing-indicator">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        </div>
-      `;
-      messageList.appendChild(typingDiv);
-      messageList.scrollTop = messageList.scrollHeight;
-    }
+    function showTyping() { const ml = document.getElementById('messageList'); const data = roleData[currentRole]; typingDiv = document.createElement('div'); typingDiv.className = 'message assistant'; typingDiv.innerHTML = `<div class="message-avatar"><img src="${data.avatar}" alt=""></div><div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>`; ml.appendChild(typingDiv); ml.scrollTop = ml.scrollHeight; }
+    function hideTyping() { if (typingDiv) { typingDiv.remove(); typingDiv = null; } }
 
-    function hideTyping() {
-      if (typingDiv) {
-        typingDiv.remove();
-        typingDiv = null;
-      }
-    }
+    document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    document.getElementById('chatInput').addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
+    document.getElementById('authPassword').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
 
-    // 回车发送，Shift+Enter 换行
-    document.getElementById('chatInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    // 自动调整输入框高度
-    document.getElementById('chatInput').addEventListener('input', function() {
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-    });
+    // 初始化
+    checkAuth();
   </script>
 </body>
 </html>

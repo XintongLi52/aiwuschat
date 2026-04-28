@@ -1,0 +1,17 @@
+{
+  "api_key": "sk-zkCHT0y91RpJSJg5UIn5CGecXtVfZawyh1zEW4AoByu9eVi3",
+  "base_url": "https://api.btylbt.top/v1",
+  "model": "qwen3.5-plus",
+  "temperature": 0.7,
+  "max_tokens": 1024,
+  "stream": true,
+  "disable_thinking": true,
+  "jwt_secret": "aiwus-secret-change-me-in-production",
+  "mysql": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "ce",
+    "password": "123",
+    "database": "aiwus"
+  }
+}

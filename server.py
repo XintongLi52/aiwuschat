@@ -1,10 +1,15 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 from openai import OpenAI
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
 import base64
 import uuid
+import jwt
+import datetime
+import pymysql
+from functools import wraps
 
 # 加载配置
 with open(os.path.join(os.path.dirname(__file__), 'config.json'), 'r') as f:
@@ -16,12 +21,122 @@ CORS(app)
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+JWT_SECRET = config.get('jwt_secret', 'aiwus-default-secret')
+
 client = OpenAI(
     api_key=config['api_key'],
     base_url=config['base_url']
 )
 
+# ========================
+# 数据库MySQL
+# ========================
+
+def get_db():
+    if 'db' not in g:
+        mc = config['mysql']
+        g.db = pymysql.connect(
+            host=mc['host'],
+            port=mc.get('port', 3306),
+            user=mc['user'],
+            password=mc['password'],
+            database=mc['database'],
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=True
+        )
+    return g.db
+
+@app.teardown_appcontext
+def close_db(exc):
+    db = g.pop('db', None)
+    if db:
+        db.close()
+
+def init_db():
+    mc = config['mysql']
+    conn = pymysql.connect(
+        host=mc['host'],
+        port=mc.get('port', 3306),
+        user=mc['user'],
+        password=mc['password'],
+        charset='utf8mb4',
+        autocommit=True
+    )
+    cur = conn.cursor()
+    cur.execute(f"CREATE DATABASE IF NOT EXISTS `{mc['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+    cur.close()
+    conn.select_db(mc['database'])
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            nickname VARCHAR(50) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            role VARCHAR(50) NOT NULL,
+            title VARCHAR(200) DEFAULT '新对话',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_user_role (user_id, role),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            conversation_id INT NOT NULL,
+            role VARCHAR(20) NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_conv (conversation_id),
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    cur.close()
+    conn.close()
+
+# 启动时初始化数据库
+init_db()
+
+# ========================
+# JWT 认证
+# ========================
+
+def create_token(user_id):
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def auth_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({"error": "未登录"}), 401
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+            g.user_id = payload['user_id']
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "登录已过期"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "无效的登录凭证"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+# ========================
 # 角色系统提示词
+# ========================
+
 SYSTEM_PROMPTS = {
     "xiaoying": """你是一个叫小樱的女孩，性格温柔、善解人意，喜欢咖啡、电影和深夜聊天。
 你的说话风格轻松自然，像朋友一样陪伴用户聊天。
@@ -61,6 +176,10 @@ SYSTEM_PROMPTS = {
 TEXT_EXTENSIONS = {'.txt', '.md', '.csv', '.log', '.json', '.xml', '.html', '.css', '.js', '.py'}
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
 
+# ========================
+# 静态文件
+# ========================
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -69,7 +188,131 @@ def index():
 def static_files(path):
     return send_from_directory('.', path)
 
+# ========================
+# 用户接口
+# ========================
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+    nickname = data.get('nickname', '').strip()
+
+    if not email or not password or not nickname:
+        return jsonify({"error": "邮箱、密码和昵称不能为空"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "密码至少6位"}), 400
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+    if cur.fetchone():
+        cur.close()
+        return jsonify({"error": "该邮箱已注册"}), 400
+
+    pw_hash = generate_password_hash(password)
+    cur.execute("INSERT INTO users (email, password_hash, nickname) VALUES (%s, %s, %s)",
+                (email, pw_hash, nickname))
+    user_id = cur.lastrowid
+    cur.close()
+
+    token = create_token(user_id)
+    return jsonify({"token": token, "user": {"id": user_id, "email": email, "nickname": nickname}})
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT id, email, nickname, password_hash FROM users WHERE email=%s", (email,))
+    user = cur.fetchone()
+    cur.close()
+
+    if not user or not check_password_hash(user['password_hash'], password):
+        return jsonify({"error": "邮箱或密码错误"}), 401
+
+    token = create_token(user['id'])
+    return jsonify({"token": token, "user": {"id": user['id'], "email": user['email'], "nickname": user['nickname']}})
+
+@app.route('/api/user', methods=['GET'])
+@auth_required
+def get_user():
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT id, email, nickname FROM users WHERE id=%s", (g.user_id,))
+    user = cur.fetchone()
+    cur.close()
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+    return jsonify({"user": user})
+
+# ========================
+# 会话接口
+# ========================
+
+@app.route('/api/conversations', methods=['GET'])
+@auth_required
+def list_conversations():
+    role = request.args.get('role', '')
+    db = get_db()
+    cur = db.cursor()
+    if role:
+        cur.execute("SELECT id, role, title, created_at, updated_at FROM conversations WHERE user_id=%s AND role=%s ORDER BY updated_at DESC", (g.user_id, role))
+    else:
+        cur.execute("SELECT id, role, title, created_at, updated_at FROM conversations WHERE user_id=%s ORDER BY updated_at DESC", (g.user_id,))
+    rows = cur.fetchall()
+    cur.close()
+    for r in rows:
+        for k in ('created_at', 'updated_at'):
+            if r[k]:
+                r[k] = r[k].strftime('%Y-%m-%d %H:%M:%S')
+    return jsonify({"conversations": rows})
+
+@app.route('/api/conversations', methods=['POST'])
+@auth_required
+def create_conversation():
+    data = request.json
+    role = data.get('role', 'aiwus')
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("INSERT INTO conversations (user_id, role) VALUES (%s, %s)", (g.user_id, role))
+    conv_id = cur.lastrowid
+    cur.close()
+    return jsonify({"id": conv_id, "role": role, "title": "新对话"})
+
+@app.route('/api/conversations/<int:conv_id>', methods=['DELETE'])
+@auth_required
+def delete_conversation(conv_id):
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("DELETE FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
+    cur.close()
+    return jsonify({"success": True})
+
+@app.route('/api/conversations/<int:conv_id>/messages', methods=['GET'])
+@auth_required
+def get_messages(conv_id):
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("SELECT id FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
+    if not cur.fetchone():
+        cur.close()
+        return jsonify({"error": "会话不存在"}), 404
+    cur.execute("SELECT role, content FROM messages WHERE conversation_id=%s ORDER BY id ASC", (conv_id,))
+    msgs = cur.fetchall()
+    cur.close()
+    return jsonify({"messages": msgs})
+
+# ========================
+# 文件上传
+# ========================
+
 @app.route('/api/upload', methods=['POST'])
+@auth_required
 def upload():
     if 'file' not in request.files:
         return jsonify({"success": False, "error": "没有文件"}), 400
@@ -89,12 +332,7 @@ def upload():
         mime = f"image/{ext.lstrip('.')}"
         if ext in ('.jpg', '.jpeg'):
             mime = 'image/jpeg'
-        return jsonify({
-            "success": True,
-            "type": "image",
-            "filename": file.filename,
-            "data_url": f"data:{mime};base64,{b64}"
-        })
+        return jsonify({"success": True, "type": "image", "filename": file.filename, "data_url": f"data:{mime};base64,{b64}"})
     elif ext in TEXT_EXTENSIONS:
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -102,32 +340,45 @@ def upload():
         except UnicodeDecodeError:
             with open(filepath, 'r', encoding='gbk', errors='ignore') as f:
                 content = f.read()
-        return jsonify({
-            "success": True,
-            "type": "text",
-            "filename": file.filename,
-            "content": content
-        })
+        return jsonify({"success": True, "type": "text", "filename": file.filename, "content": content})
     else:
-        return jsonify({
-            "success": True,
-            "type": "unsupported",
-            "filename": file.filename,
-            "content": f"[文件: {file.filename}]"
-        })
+        return jsonify({"success": True, "type": "unsupported", "filename": file.filename, "content": f"[文件: {file.filename}]"})
+
+# ========================
+# 对话接口
+# ========================
 
 @app.route('/api/chat', methods=['POST'])
+@auth_required
 def chat():
     data = request.json
     messages = data.get('messages', [])
     role = data.get('role', 'aiwus')
+    conv_id = data.get('conversation_id')
     enable_search = data.get('enable_search', False)
+    user_content = data.get('user_content', '')
+
+    # 确保有会话
+    db = get_db()
+    cur = db.cursor()
+    if conv_id:
+        cur.execute("SELECT id FROM conversations WHERE id=%s AND user_id=%s", (conv_id, g.user_id))
+        if not cur.fetchone():
+            cur.close()
+            return jsonify({"error": "会话不存在"}), 404
+    else:
+        cur.execute("INSERT INTO conversations (user_id, role) VALUES (%s, %s)", (g.user_id, role))
+        conv_id = cur.lastrowid
+
+    # 保存用户消息
+    if user_content:
+        save_content = user_content if isinstance(user_content, str) else json.dumps(user_content, ensure_ascii=False)
+        cur.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'user', %s)", (conv_id, save_content))
+
+    cur.close()
 
     system_prompt = SYSTEM_PROMPTS.get(role, SYSTEM_PROMPTS['aiwus'])
-
-    full_messages = [
-        {"role": "system", "content": system_prompt}
-    ] + messages
+    full_messages = [{"role": "system", "content": system_prompt}] + messages
 
     extra_body = {}
     if config.get('disable_thinking', False):
@@ -146,29 +397,70 @@ def chat():
         )
 
         if config.get('stream', True):
+            full_reply = []
+
             def generate():
                 for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
+                        text = chunk.choices[0].delta.content
+                        full_reply.append(text)
+                        yield text
+                # 流结束后保存 AI 回复
+                reply_text = ''.join(full_reply)
+                if reply_text:
+                    db2 = pymysql.connect(
+                        host=config['mysql']['host'],
+                        port=config['mysql'].get('port', 3306),
+                        user=config['mysql']['user'],
+                        password=config['mysql']['password'],
+                        database=config['mysql']['database'],
+                        charset='utf8mb4',
+                        autocommit=True
+                    )
+                    c = db2.cursor()
+                    c.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'assistant', %s)", (conv_id, reply_text))
+                    # 如果是首条回复，自动生成会话标题
+                    c.execute("SELECT COUNT(*) as cnt FROM messages WHERE conversation_id=%s AND role='assistant'", (conv_id,))
+                    row = c.fetchone()
+                    if row and row[0] == 1:
+                        try:
+                            title_resp = client.chat.completions.create(
+                                model=config['model'],
+                                messages=[{"role": "system", "content": "根据下面的对话内容，生成一个简短的对话标题（10字以内），直接输出标题文字，不要引号。"},
+                                          {"role": "user", "content": reply_text[:500]}],
+                                max_tokens=30,
+                                extra_body={"disable_thinking": True} if config.get('disable_thinking', False) else None
+                            )
+                            title = title_resp.choices[0].message.content.strip()[:50]
+                            c.execute("UPDATE conversations SET title=%s WHERE id=%s", (title, conv_id))
+                        except Exception:
+                            pass
+                    c.close()
+                    db2.close()
 
-            return app.response_class(
-                generate(),
-                mimetype='text/plain'
-            )
+            resp = app.response_class(generate(), mimetype='text/plain')
+            resp.headers['X-Conversation-Id'] = str(conv_id)
+            return resp
         else:
             content = response.choices[0].message.content
-            return app.response_class(content, mimetype='text/plain')
+            cur2 = get_db().cursor()
+            cur2.execute("INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'assistant', %s)", (conv_id, content))
+            cur2.close()
+            resp = app.response_class(content, mimetype='text/plain')
+            resp.headers['X-Conversation-Id'] = str(conv_id)
+            return resp
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ========================
+# 追问建议
+# ========================
 
 @app.route('/api/suggestions', methods=['POST'])
+@auth_required
 def suggestions():
     data = request.json
     answer = data.get('answer', '')
-    role = data.get('role', 'aiwus')
 
     try:
         response = client.chat.completions.create(
